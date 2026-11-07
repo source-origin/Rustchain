@@ -71,15 +71,24 @@ import requests
 BASE_URL = "https://rustchain.org"
 MINER_ID = "example-wallet"
 
-history = requests.get(
+response = requests.get(
     f"{BASE_URL}/wallet/history",
     params={"miner_id": MINER_ID, "limit": 20},
     timeout=15,
 ).json()
 
-confirmed = [tx for tx in history if tx.get("status") == "confirmed"]
-pending = [tx for tx in history if tx.get("status") == "pending"]
-failed = [tx for tx in history if tx.get("status") == "failed"]
+# The endpoint returns an object, not a list: iterate response["transactions"].
+transactions = response.get("transactions", [])
+
+# `status` is only present on rows still in the pending ledger. A transfer that
+# has reached the immutable ledger is returned WITHOUT a status key at all, so
+# filtering on status == "confirmed" alone never matches a settled transfer.
+pending = [tx for tx in transactions if tx.get("status") == "pending"]
+failed = [tx for tx in transactions if tx.get("status") in ("failed", "voided")]
+confirmed = [
+    tx for tx in transactions
+    if "status" not in tx and tx.get("type") in ("transfer_in", "transfer_out")
+]
 
 print("confirmed:", len(confirmed))
 print("pending:", len(pending))

@@ -170,11 +170,20 @@ import hashlib
 public_key_hex = private_key.verify_key.encode().hex()
 from_address = "RTC" + hashlib.sha256(bytes.fromhex(public_key_hex)).hexdigest()[:40]
 
-# Create canonical message to sign (uses from/to/amount, not from_address/to_address/amount_rtc)
+# Create the canonical message to sign.
+# The node rebuilds these exact bytes, so four details are load-bearing:
+#   * keys are from/to/amount/fee/memo/nonce (+chain_id), not the outer field names
+#   * `amount` is a float on the wire: 100 is rebuilt as 100.0, and "100" signs
+#     different bytes than "100.0" -> {"error": "Invalid signature"}
+#   * `fee` is part of the current form and must be written as 0.0 (the node
+#     rejects any nonzero signed fee with SIGNED_TRANSFER_FEE_UNSETTLED, and a
+#     fee-less message is only accepted through the legacy form)
+#   * `nonce` inside the message is a STRING, even when the body sends a number
 transfer_msg = {
     "from": from_address,
     "to": "RTC_recipient_address",
-    "amount": 100,
+    "amount": 100.0,
+    "fee": 0.0,
     "nonce": "1234567890",
     "memo": "",
     "chain_id": "rustchain-mainnet-v2"
@@ -201,7 +210,9 @@ payload = {
 response = requests.post(
     "https://rustchain.org/wallet/transfer/signed",
     json=payload,
-    verify=False  # For self-signed cert
+    # Do not disable TLS verification on a request that carries a signed transfer.
+    # If the node uses a self-signed cert, point verify at its CA file instead:
+    verify="/path/to/node-ca.pem"
 )
 print(response.json())
 ```

@@ -343,6 +343,24 @@ curl -fsS -X POST https://rustchain.org/wallet/transfer/signed \
 }
 ```
 
+**Signed-transfer message contract**
+
+The request body and the signed message are not the same object. The node rebuilds
+the message from the body and verifies your signature against those bytes:
+
+- keys: `from`, `to`, `amount`, `fee`, `memo`, `nonce`, plus `chain_id` when supplied
+- `amount` is rebuilt through `float(amount_rtc)`, so `100` becomes `100.0`
+- `nonce` is stringified (`"12345"`) even though the body may carry a number
+- `nonce` must be **strictly increasing** per sending address; reusing a value
+  returns `REPLAY_DETECTED` and lowering it returns `OUT_OF_ORDER_NONCE`
+- `fee` must be `0.0` today (see the fee note below)
+
+**Address form matters for payees**
+
+Addresses derived from a public key are lowercase. Balance lookups are exact
+string comparisons, so a payee written `RTC` followed by uppercase hex credits a
+row that no key can spend from. Always send the lowercase canonical form.
+
 ### Fee market compatibility
 
 RustChain keeps legacy signed-transfer fees backward compatible while exposing
